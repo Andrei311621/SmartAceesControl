@@ -1,1 +1,13 @@
+I developed an Android software application using the MIT App Inventor visual programming environment. The source code is created by connecting and assembling multiple functional blocks, similar to a puzzle, depending on the requirements of each application.
 
+The interface includes two sections:
+
+- Designer: In this section, I created and edited the user interface. The editor includes a variety of visual components that can be arranged using drag and drop.
+- Blocks: In this section, I implemented the application’s functionality by using and connecting logic blocks.
+
+When the application is opened, the user is presented with the following interface. On this screen, the following elements can be observed:
+
+- A label displaying the text: “Access Control System”;
+- An “Administrative Access” button, which is used to navigate to screen 2;
+- An “Stop Alarm” button, which turns off the buzzer/alarm when pressed;
+- FirebaseDB1, which is responsible for sending data to Firebase and stopping the alarm.
