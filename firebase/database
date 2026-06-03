@@ -1,1 +1,3 @@
+To obtain permission to read and modify data, I accessed the Rules section and updated the read and write conditions. Without completing this step, the Android application would not have the rights to read or write data.
 
+For communication between the database and the application, the FirebaseDB component from the MIT App Inventor platform is required. Configuring the FirebaseDB component involves extracting the database URL and a unique secret key associated with the created database. The URL can be found on the main page of the Realtime Database interface, in the Data section, while the secret key is located in Project settings → Service accounts → Database secrets.
