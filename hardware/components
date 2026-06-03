@@ -1,1 +1,23 @@
+The circuit is composed of:
 
+• The Arduino board communicates with the fingerprint sensor to receive the user’s biometric data; it requests and receives fingerprint data from the sensor and can store or compare this data with previously recorded samples for authentication. Based on the authentication results, the Arduino decides whether to grant or deny access.
+
+• The LCD, connected via the I2C module, displays messages that inform users about the current system status, such as “System is ready,” “Place your finger,” “Access granted,” “Access denied,” or “Error.” The screen can guide users through the steps required to register a new fingerprint, enter a PIN code, or perform other authentication procedures. It can be observed that the SCL (Serial Clock Line) pin of the LCD module is connected to the SCL pin on the Arduino board, and the SDA (Serial Data Line) pin of the LCD is connected to the SDA pin on the Arduino. These connections are essential to ensure proper I2C communication between the two devices, allowing synchronization and data transfer between them.
+
+• To indicate the access status, two LEDs have been implemented to signal whether access is granted or denied. For the red LED, the anode is connected to one terminal of a 220-ohm resistor, while the cathode is connected to GND (ground). The other terminal of the resistor is connected to analog pin A0. For the green LED, the anode is connected to one terminal of another 220-ohm resistor, while the cathode is connected to GND. The other terminal of the resistor is connected to analog pin A1. When the red LED is on, it indicates that access is denied. When the green LED is on, it indicates that access is granted.
+
+• The servo motor, when activated, allows the door to open. When the servo motor rotates to a certain position, it unlocks the door, and when it rotates to the opposite position, it locks it again. Once the fingerprint sensor identifies a valid fingerprint, the Arduino sends a signal to the servo motor to automatically open the door. Pin 10 is used to send the control signals required for the servo motor’s movement. This pin is configured as an output in the Arduino code and is used to generate PWM (Pulse Width Modulation) signals needed to control the servo position.
+
+• The fingerprint sensor scans the user’s fingerprint when the user places their finger on its surface. It converts the fingerprint image or data into digital information that can be processed by the microcontroller. It ensures that only authorized users can access the protected area, providing a high level of security and convenience. The data pin (sensor TX) is connected to Arduino digital pin 12, and the control pin (sensor RX) is connected to Arduino digital pin 13.
+
+• The buzzer plays an essential role by providing audio feedback that complements the system’s functionality. 
+
+   For example:
+
+- It emits a short sound to indicate that the fingerprint has been successfully recognized and access has been granted.
+- It emits a warning sound (e.g., a long beep or multiple rapid beeps) to indicate that the fingerprint was not recognized or access was denied.
+- The positive terminal (+) of the buzzer is connected to Arduino digital pin 11, and the negative terminal (-) is connected to Arduino GND (ground).
+
+• The use of an ESP8266 module in a fingerprint-based door unlocking system brings multiple advantages due to its Wi-Fi connectivity capabilities and remote monitoring/control options. The ESP8266 RX pin (receive) is connected to the microcontroller TX pin, and the ESP8266 TX pin (transmit) is connected to the microcontroller RX pin.
+
+• The keypad is used in cases where the fingerprint recognition system does not function properly for various reasons (technical faults, sensor damage, the user’s fingerprint not being recognized, etc.). Users can enter a PIN code via the keypad to unlock the door. Microcontroller pins 2 to 5 are connected to the keypad row pins, and pins 6 to 9 are connected to the keypad column pins.
