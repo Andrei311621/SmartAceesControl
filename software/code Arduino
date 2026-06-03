@@ -1,1 +1,528 @@
+#include <Adafruit_Fingerprint.h>
+#include <LiquidCrystal_I2C.h>
+#include <Servo.h>
+#include <SoftwareSerial.h>
+#include <Keypad.h>
+#include <EEPROM.h>
+
+SoftwareSerial mySerial(12, 13); 
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+
+#define espSerial Serial
+#define SERVO_PIN 10
+#define SERVO_OPEN_POSITION 30
+#define SERVO_CLOSED_POSITION 120
+#define RED_LED_PIN A0
+#define GREEN_LED_PIN A1
+#define BUZZER_PIN 11
+#define EEPROM_START_ADDRESS 0
+#define NAME_MAX_LENGTH 20
+
+const byte ROWS = 4; 
+const byte COLS = 3; 
+char keys[ROWS][COLS] = {
+  {'1','2','3'},
+  {'4','5','6'},
+  {'7','8','9'},
+  {'*','0','#'}
+};
+byte rowPins[ROWS] = {2, 3, 4, 5}; 
+byte colPins[COLS] = {6, 7, 8}; 
+
+Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
+
+Servo myServo;
+
+int numarGreseli = 0;
+const int numarmaximGreseli = 3;
+int numargreselikeypad = 0;
+const int numarmaximgreselikeypad = 3;
+unsigned long MOVING_TIME = 1500;
+bool useKeypad = false;
+bool alarmActive = true; 
+String inputPassword = ""; 
+const String correctPassword = "7353"; 
+
+byte rightArrow[8] = {
+  0b00000,
+  0b00100,
+  0b00110,
+  0b11111,
+  0b00110,
+  0b00100,
+  0b00000,
+  0b00000
+};
+
+void setup() {
+  Serial.begin(9600);
+  mySerial.begin(57600);
+espSerial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+
+  pinMode(RED_LED_PIN, OUTPUT);
+  pinMode(GREEN_LED_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(RED_LED_PIN, LOW);
+  digitalWrite(GREEN_LED_PIN, LOW);
+
+  myServo.attach(SERVO_PIN);
+  myServo.write(SERVO_CLOSED_POSITION);
+
+  lcd.createChar(0, rightArrow);
+
+  if (finger.verifyPassword()) {
+    Serial.println("Found fingerprint sensor!");
+  } else {
+    Serial.println("Did not find fingerprint sensor :(");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Senzor lipsa!");
+    delay(2000);
+    lcd.clear();
+
+    useKeypad = true;
+    lcd.setCursor(3, 0);
+    lcd.print("Introduceti");
+    lcd.setCursor(5, 1);
+    lcd.print("parola:");
+    return;
+  }
+
+  
+  displayArrow();
+}
+
+void loop() {
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    
+    if (command.startsWith("ADD")) {
+      command = command.substring(4);
+      
+      int separatorIndex = command.indexOf(',');
+      if (separatorIndex > 0) {
+        int id = command.substring(0, separatorIndex).toInt();
+        String name = command.substring(separatorIndex + 1);
+
+        addFingerprint(id, name);}
+
+    } else if (command.startsWith("DELETE")) {
+      int id = command.substring(7).toInt();
+      deleteFingerprint(id);
+    } 
+    else if  (command == ("LIST_FINGERPRINTS")) {
+      listAllFingerprints();  
+      }
+      else if (command == ("Connected to WiFi")) {
+        lcd.clear();
+     lcd.setCursor(3, 0);
+     lcd.print("Connected");
+    delay(2000);
+     lcd.clear();
+     displayArrow();
+        } }
+  if (espSerial.available()) {
+    String command = espSerial.readStringUntil('\n');
+    command.trim();
+
+    
+    if (command == "DISABLE_ALARM" && alarmActive) {
+      Serial.println("Received DISABLE_ALARM command from NodeMCU");
+      resetAlarm();
+    }
+}
+
+  if (useKeypad) {
+    handleKeypad();
+  } else {
+    myServo.detach();
+    if (finger.getImage() == FINGERPRINT_OK) {
+      if (finger.image2Tz() == FINGERPRINT_OK) {
+        if (finger.fingerFastSearch() == FINGERPRINT_OK) {
+          int id = finger.fingerID;
+          Serial.print("Access permis pentru ID: ");
+             Serial.print(id);
+          String name = readNameFromEEPROM(id);
+         if (id > 0) { 
+                    String name = readNameFromEEPROM(id);
+                    lcd.clear();
+                    lcd.setCursor(3, 0);
+                    lcd.print("Bun venit");
+                    lcd.setCursor(5, 1);
+                    lcd.print(name);
+                    tone(BUZZER_PIN, 5000);
+                    delay(300);
+                    noTone(BUZZER_PIN);
+                    digitalWrite(GREEN_LED_PIN, HIGH);
+                    digitalWrite(RED_LED_PIN, LOW);
+                    numarGreseli = 0;
+                    myServo.attach(SERVO_PIN);
+                    openServo();
+                    delay(5000);
+                    closeServo();
+                    digitalWrite(GREEN_LED_PIN, LOW);
+                    lcd.clear();
+                    displayArrow();
+                } else {
+                    Serial.println("Invalid ID detected!");
+                }
+            } else {
+                handleFingerprintError();
+                delay(200);
+            }
+        }
+    }
+}
+delay(100);
+}
+
+void addFingerprint(int id  ,String name) {
+  Serial.println("Pregătesc pentru adăugarea amprentei cu ID-ul: " + String(id));
+
+  int result = enrollFingerprint(id);
+
+  if (result == FINGERPRINT_OK) {
+    Serial.println("Amprenta adăugată cu succes!");
+     lcd.clear();
+     lcd.setCursor(3, 0);
+     lcd.print("Succes!");
+     delay(2000);
+     lcd.clear();
+  displayArrow();
+
+    saveNameToEEPROM(id, name);
+  } else {
+    Serial.print("Eroare la adăugarea amprentei, cod eroare: ");
+    lcd.clear();
+     lcd.setCursor(3, 0);
+     lcd.print("Eroare!");
+    Serial.println(result);
+    delay(2000);
+     lcd.clear();
+  displayArrow();
+  }
+}
+void saveNameToEEPROM(int id, String name) {
+  int startAddress = EEPROM_START_ADDRESS + id * (NAME_MAX_LENGTH + 1);
+  for (int i = 0; i < NAME_MAX_LENGTH; i++) {
+    if (i < name.length()) {
+      EEPROM.write(startAddress + i, name[i]);
+    } else {
+      EEPROM.write(startAddress + i, 0); 
+    }
+  }
+  EEPROM.write(startAddress + NAME_MAX_LENGTH, 0); 
+}
+
+int enrollFingerprint(int id) {
+  int p;
+
+  Serial.println("Plasează degetul pe senzor...");
+   lcd.clear();
+     lcd.setCursor(0, 0);
+     lcd.print("Plaseaza degetul");
+  p = captureFingerprintImage();
+  if (p != FINGERPRINT_OK) return p;
+
+  Serial.println("Creare model...");
+  p = createFingerprintModel(id);
+  return p;
+}
+
+int captureFingerprintImage() {
+  int p = -1;
+  while (p != FINGERPRINT_OK) {
+    p = finger.getImage();
+    if (p == FINGERPRINT_NOFINGER) {
+      Serial.print(".");
+      delay(200);
+    } else if (p != FINGERPRINT_OK) {
+      Serial.print("Eroare captură imagine: ");
+      Serial.println(p);
+      return p;
+    }
+  }
+  return FINGERPRINT_OK;
+}
+
+int createFingerprintModel(int id) {
+    int p;
+
+    p = finger.image2Tz(1);
+    if (p != FINGERPRINT_OK) return p;
+
+    Serial.println("Îndepărtează degetul...");
+    lcd.clear();
+     lcd.setCursor(0, 0);
+     lcd.print("Indeparteaza");
+    delay(2000);
+
+    p = finger.getImage();
+    if (p != FINGERPRINT_NOFINGER) {
+        Serial.println("Așteptare deget...");
+        return FINGERPRINT_NOFINGER;
+    }
+
+    Serial.println("Plasează același deget din nou...");
+    lcd.clear();
+     lcd.setCursor(0, 0);
+     lcd.print("Plaseaza degetul");
+    while (p != FINGERPRINT_OK) {
+        p = finger.getImage();
+        if (p == FINGERPRINT_NOFINGER) {
+            Serial.print(".");
+            delay(100);
+        } else if (p != FINGERPRINT_OK) {
+            Serial.print("Eroare captură imagine: ");
+            Serial.println(p);
+            return p;
+        }
+    }
+
+    p = finger.image2Tz(2);
+    if (p != FINGERPRINT_OK) return p;
+
+    p = finger.createModel();
+    if (p != FINGERPRINT_OK) return p;
+
+    p = finger.storeModel(id);
+    return p;
+}
+
+void listAllFingerprints() {
+  Serial.println("LIST_START"); 
+
+  for (int id = 1; id < 128; id++) { 
+    if (finger.loadModel(id) == FINGERPRINT_OK) {
+      String name = readNameFromEEPROM(id);
+      if (name.length() > 0) {
+
+        lcd.clear();
+        lcd.print("ID:");
+        lcd.print(id);
+        lcd.setCursor(0, 1);
+        lcd.print("Name:");
+        lcd.print(name);
+        
+        Serial.print("[{\"ID\":");
+        Serial.print(id);
+        Serial.print(",\"Name\":\"");
+        Serial.print(name);
+        Serial.println("\"}]");
+      
+      delay(5000);
+      }
+      lcd.clear();
+     displayArrow();
+    }
+  }
+
+  Serial.println("END_OF_USERS"); 
+}
+
+String readNameFromEEPROM(int id) {
+    String name = "";
+    int startAddress = EEPROM_START_ADDRESS + id * (NAME_MAX_LENGTH + 1);
+    for (int i = 0; i < NAME_MAX_LENGTH; i++) {
+        char c = EEPROM.read(startAddress + i);
+        if (c == 0) break; 
+        name += c;
+    }
+    return name;
+}
+
+void deleteFingerprint(int id) {
+  uint8_t p = finger.deleteModel(id);
+  if (p == FINGERPRINT_OK) {
+    Serial.println("Amprenta  stearsa cu succes!");
+    lcd.clear();
+    lcd.setCursor(6, 0);
+   lcd.print("ID:");
+   lcd.print(id);
+      lcd.setCursor(5, 1);
+      lcd.print("Sters");
+      delay(5000);
+      lcd.clear();
+     displayArrow();
+  } else {
+    Serial.print("Eroare la stergerea amprentei, cod eroare: ");
+    Serial.println(p);
+    lcd.clear();
+    lcd.setCursor(3, 0);
+    lcd.print("Eroare!");
+    delay(2000); 
+  lcd.clear();
+  displayArrow();
+  }
+}
+
+void handleFingerprintError() {
+  Serial.println("Acces interzis");
+  lcd.clear();
+  numarGreseli++;
+  int Incercari = numarmaximGreseli - numarGreseli;
+  lcd.setCursor(0, 0);
+  lcd.print("Acces interzis");
+  tone(BUZZER_PIN, 500);
+  digitalWrite(GREEN_LED_PIN, LOW);
+  digitalWrite(RED_LED_PIN, HIGH);
+  delay(2000);
+  digitalWrite(RED_LED_PIN, LOW);
+  noTone(BUZZER_PIN);
+  lcd.clear();
+  displayArrow();
+
+  if (numarGreseli >= numarmaximGreseli) {
+    useKeypad = true;
+    lcd.clear();
+    lcd.setCursor(3, 0);
+    lcd.print("Introduceti");
+    lcd.setCursor(5, 1);
+    lcd.print("parola:");
+  }
+}
+
+void handleKeypad() {
+  char key = keypad.getKey();
+  if (key) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Parola introdusa:");
+    lcd.setCursor(0, 1);
+    lcd.print(inputPassword);
+
+    if (key == '#') {
+      if (inputPassword == correctPassword) {
+        lcd.clear();
+        lcd.print("Acces permis");
+        tone(BUZZER_PIN, 5000);
+        delay(300);
+        noTone(BUZZER_PIN);
+        myServo.attach(SERVO_PIN);
+        openServo();
+        delay(5000);
+        closeServo();
+        numargreselikeypad = 0;
+        numarGreseli = 0;
+        lcd.clear();
+        displayArrow();
+        useKeypad = false;
+      } else {
+        lcd.clear();
+        numargreselikeypad++;
+        int IncercariKeypad = numarmaximgreselikeypad - numargreselikeypad;
+        lcd.setCursor(0, 0);
+        lcd.print("Parola gresita");
+        tone(BUZZER_PIN, 500);
+        digitalWrite(GREEN_LED_PIN, LOW);
+        digitalWrite(RED_LED_PIN, HIGH);
+        delay(1000);
+        digitalWrite(RED_LED_PIN, LOW);
+        noTone(BUZZER_PIN);
+        lcd.setCursor(0, 1);
+        lcd.print("Incercari: ");
+        lcd.print(IncercariKeypad);
+        delay(1000);
+        lcd.clear();
+        lcd.setCursor(3, 0);
+        lcd.print("Introduceti");
+        lcd.setCursor(5, 1); 
+        lcd.print("parola");
+      }
+      inputPassword = "";
+      if (numargreselikeypad >= numarmaximgreselikeypad) {
+        activateAlarm();
+      }
+    } else if (key == '*') {
+      if (inputPassword.length() > 0) {
+        inputPassword.remove(inputPassword.length() - 1);
+      }
+    } else {
+      inputPassword += key;
+    }
+    lcd.setCursor(0, 1);
+    lcd.print(inputPassword);
+  }
+}
+
+void displayArrow() {
+  lcd.clear();
+  lcd.setCursor(3, 0);
+  lcd.print("Place finger");
+  lcd.setCursor(7, 1);
+  lcd.write(byte(0));
+}
+
+void openServo() {
+  unsigned long startTime = millis();
+  unsigned long elapsedTime = 0;
+
+  while (elapsedTime < MOVING_TIME) {
+    unsigned long currentTime = millis();
+    elapsedTime = currentTime - startTime;
+    long angle = map(elapsedTime, 0, MOVING_TIME, SERVO_CLOSED_POSITION, SERVO_OPEN_POSITION);
+    myServo.write(angle);
+  }
+  myServo.write(SERVO_OPEN_POSITION);
+}
+
+void closeServo() {
+  unsigned long startTime = millis();
+  unsigned long elapsedTime = 0;
+
+  while (elapsedTime < MOVING_TIME) {
+    unsigned long currentTime = millis();
+    elapsedTime = currentTime - startTime;
+    long angle = map(elapsedTime, 0, MOVING_TIME, SERVO_OPEN_POSITION, SERVO_CLOSED_POSITION);
+    myServo.write(angle);
+  }
+  myServo.write(SERVO_CLOSED_POSITION);
+}
+
+void activateAlarm() {
+  alarmActive = true; 
+  lcd.clear();
+  lcd.setCursor(3, 0);
+  lcd.print("Interzis!!!");
+
+  espSerial.println("ACTIVATE_ALARM");
+
+  while (alarmActive) { 
+    tone(BUZZER_PIN, 1000);
+    digitalWrite(GREEN_LED_PIN, LOW);
+    digitalWrite(RED_LED_PIN, HIGH);
+    delay(100);
+    digitalWrite(RED_LED_PIN, LOW);
+    delay(200);
+    noTone(BUZZER_PIN);
+    delay(200);
+
+    if (espSerial.available()) {
+      String command = espSerial.readStringUntil('\n');
+      command.trim();
+      if (command == "DISABLE_ALARM" && alarmActive) {
+        resetAlarm();
+      }
+    }
+  }
+}
+
+void resetAlarm() {
+  alarmActive = false;
+  lcd.clear();
+  lcd.setCursor(3, 0);
+  lcd.print("Alarma oprita");
+  delay(2000);
+  numargreselikeypad = 0;
+  numarGreseli = 0;
+  useKeypad = false;   
+  lcd.clear();
+  displayArrow();
+}
 
