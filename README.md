@@ -20,25 +20,26 @@ The system consists of four main components:
 ☁️ Firebase Cloud Database<br>
 📱 Android Mobile Application
 
-📸 Project Demonstration
-Hardware Setup
+<h2>📸 Project Demonstration</h2>
+<h3>Hardware Setup</h3>
 
 ![Hardware Setup](hardware/setup1.png)
 ![Hardware Setup](hardware/setup2.png)
 ![Hardware Setup](hardware/setup3.png)
 
-Circuit Diagram
+
+<h3>Circuit Diagram</h3>
 
 ![Circuit Diagram](hardware/schema.png)
 
 
-Mobile Application
+<h3>Mobile Application</h3>
 
 ![Android App](software/app1.png)
 ![Android App](software/app2.png)
 ![Android App](software/app3.png)
 
-Firebase Database
+<h3>Firebase Database</h3>
 
 ![Firebase](firebase/database1.png)
 ![Firebase](firebase/database2.png)
